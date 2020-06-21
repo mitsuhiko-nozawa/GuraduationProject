@@ -1,4 +1,4 @@
-#このファイルでしか使わないものをここに書けばいいよ
+#このファイルでしか使わないものをここに書けばいいよ!!!
 import re
 def parse(parser, df, embedding_dim):
     text_by_user = {}
