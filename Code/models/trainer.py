@@ -3,22 +3,50 @@ import pandas as pd
 from utils.util import rmse, mae
 
 class trainer():
-    def __init__(self):
-        self.param = 1
+    def __init__(self, user_dict, item_dict):
+        self.user_dict = user_dict
+        self.item_dict = item_dict
+        self.user_size = len(self.user_dict)
+        self.item_size = len(self.item_dict)
+        self.items_by_user = None
+        self.users_by_item = None
 
-    def to_matrix(self, df):
-        if "reviewText" in df.columns:
-            df.drop("reviewText", axis=1, inplace=True)
-        df = df.pivot_table(values=["overall"], index=["reviewerID"], columns=["asin"])
-        df.fillna(0, inplace=True)
-        return df
+        self.train_size = None
+        self.valid_size = None
+        self.test_size = None
 
-    def evaluate_(self, label_mat, pred_mat):
-        rmse_error = rmse(label_mat, pred_mat)
-        mae_error = mae(label_mat, pred_mat)
-        #print("rmse is : ", rmse_error)
-        #print("mae is : ", mae_error)
-        return rmse_error, mae_error
+        self.preds = {}  # { "reviewerID" : [], "asin" : [], "overall" : []}
+
+        self.errors = []
+
+
+    def make_data(self, train):
+        items_by_user = {}
+        users_by_item = {}
+        for i in range(self.train_size):
+            user_id = train["reviewerID"][i]
+            item_id = train["asin"][i]
+            overall = train["overall"][i]
+            if user_id not in items_by_user:
+                items_by_user[user_id] = {}
+            items_by_user[user_id][item_id] = overall
+
+            if item_id not in users_by_item:
+                users_by_item[item_id] = {}
+            users_by_item[item_id][user_id] = overall
+
+
+        return items_by_user, users_by_item
+
+
+    def coo2vec(self, coo, vec_size):  # coo = {id1 : overall, id2 : overall, ...}
+        res = np.zeros(vec_size)
+        for key, val in coo.items():
+            res[key] = val
+        return res
+
+
+
 
 
 

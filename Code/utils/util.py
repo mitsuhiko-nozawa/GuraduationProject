@@ -9,27 +9,11 @@ def cossim(a1, a2):
         return 0.0
     else:
         return np.dot(a1,a2) / norm
+def rmse(vec):
+    vec = np.array(vec)
+    return (np.sum(vec ** 2) / vec.shape[0]) ** 0.5
 
-def rmse(mat1, mat2): # mat1 is test_data, mat2 is pred_data
-    # vailationとかでも使えるように、mat2で0のところは0にしたい
-    error = 0
-    for i in range(0, mat1.shape[0]):
-        idxs = np.where(mat2[i] > 0)
-        error += np.sum((mat1[i][idxs] - mat2[i][idxs])**2)
-    return (error/np.count_nonzero(mat2))**0.5
-
-def mae(mat1, mat2):
-    error = 0
-    for i in range(0, mat1.shape[0]):
-        idxs = np.where(mat2[i] > 0)
-        error += np.sum(np.abs((mat1[i][idxs] - mat2[i][idxs])))
-    return (error/np.count_nonzero(mat2))
-
-def to_matrix(self, df):
-    if "reviewText" in df.columns:
-        df.drop("reviewText", axis=1, inplace=True)
-    df = df.pivot_table(values=["overall"], index=["reviewerID"], columns=["asin"])
-    df.fillna(0, inplace=True)
-    return df
+def mae(vec):
+    np.sum(np.abs(vec)) / vec.shape[0]
 
 #def EuclidanDistance():
