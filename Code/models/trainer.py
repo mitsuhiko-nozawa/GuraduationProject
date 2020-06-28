@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from utils.util import rmse, mae
+from utils.util import mse, mae
 
 class trainer():
     def __init__(self, user_dict, item_dict):
@@ -44,6 +44,8 @@ class trainer():
         for key, val in coo.items():
             res[key] = val
         return res
+
+
 
 
 

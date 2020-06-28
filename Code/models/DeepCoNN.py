@@ -1,19 +1,18 @@
 from .trainer import trainer
-from utils.util import rmse, mae
+from utils.util import mse, mae
 
 import numpy as np
 
 from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Input, Dense, Dropout, Activation, Flatten, Dot
+from tensorflow.keras.layers import Input, Dense, Dropout, Flatten, Dot
 from tensorflow.keras.layers import Conv1D, GlobalMaxPooling1D
+from tensorflow.keras.optimizers import RMSprop
 
 
 
 class DeepCoNN_trainer(trainer):
     def __init__(self, user_dict, item_dict,
-                 train_text_by_user, train_text_by_item,
-                 valid_text_by_user, valid_text_by_item,
-                 test_text_by_user, test_text_by_item,
+                 text_by_user, text_by_item,
                  embedding_dim, filter_num, filter_size, feature_size, maxlen,
                  batch_size, epoch):
         super().__init__(user_dict, item_dict)
@@ -30,12 +29,8 @@ class DeepCoNN_trainer(trainer):
         self.errors = []
 
         """
-        self.train_text_by_user = train_text_by_user
-        self.train_text_by_item = train_text_by_item
-        self.valid_text_by_user = valid_text_by_user
-        self.valid_text_by_item = valid_text_by_item
-        self.test_text_by_user = test_text_by_user
-        self.test_text_by_item = test_text_by_item
+        self.text_by_user = text_by_user
+        self.text_by_item = text_by_item
 
 
         self.model = None
@@ -52,33 +47,36 @@ class DeepCoNN_trainer(trainer):
 
         # create model
         print("==========model creation==========")
-
         self.make_model()
-
         # prepare input
         print("==========data preparation==========")
         #train
         user_texts = []
         item_texts = []
-        for userid, itemid in zip(train["reviewerID"], train["asin"]):
-            user_texts.append(self.pad(self.train_text_by_user[userid]))
-            item_texts.append(self.pad(self.train_text_by_item[itemid]))
+        overalls = []
+        for userid, itemid, overall in zip(train["reviewerID"], train["asin"], train["overall"]):
+            user_texts.append(self.text_by_user[userid])
+            item_texts.append(self.text_by_item[itemid])
+            overalls.append(overall)
 
 
         train_X = [np.array(user_texts), np.array(item_texts)]
-        train_Y = train["overall"]
+        train_Y = np.array(overalls)
+        del user_texts, item_texts, overalls, train
 
         # valid
         user_texts = []
         item_texts = []
-        for userid, itemid in zip(valid["reviewerID"], valid["asin"]):
-            user_texts.append(self.pad(self.valid_text_by_user[userid]))
-            item_texts.append(self.pad(self.valid_text_by_item[itemid]))
+        overalls = []
+        for userid, itemid, overall in zip(valid["reviewerID"], valid["asin"], valid["overall"]):
+            user_texts.append(self.text_by_user[userid])
+            item_texts.append(self.text_by_item[itemid])
+            overalls.append(overall)
 
         valid_X = [np.array(user_texts), np.array(item_texts)]
-        valid_Y = valid["overall"]
+        valid_Y = np.array(overalls)
 
-        del user_texts, item_texts
+        del user_texts, item_texts, overalls
 
         # training
         print("==========training==========")
@@ -88,51 +86,47 @@ class DeepCoNN_trainer(trainer):
 
 
 
-
-
-
     def predict(self, test):
         user_texts = []
         item_texts = []
-        for userid, itemid in zip(test["reviewerID"], test["asin"]):
-            user_texts.append(self.pad(self.test_text_by_user[userid]))
-            item_texts.append(self.pad(self.test_text_by_item[itemid]))
+        overalls = []
+        for userid, itemid, overall in zip(test["reviewerID"], test["asin"], test["overall"]):
+            user_texts.append(self.text_by_user[userid])
+            item_texts.append(self.text_by_item[itemid])
+            overalls.append(overall)
+
 
         test_X = [np.array(user_texts), np.array(item_texts)]
-        test_Y = test["overall"]
-        preds = self.model.predict(test_X)
-        self.errors = preds-test_Y
+        test_Y = np.array(overalls)
+        del user_texts, item_texts, overalls, test
 
+        self.preds = self.model.predict(test_X).reshape(-1)
+        self.errors = self.preds-test_Y
+        print("")
 
 
     def evaluate(self):
-        loss = rmse(self.errors)
+        loss = mse(self.errors)
         print("test loss is : ", loss)
-
-
-    def pad(self, text):
-        # input :
-        # print(text.shape)
-        # print()
-        res = np.pad(text, [(0, self.maxlen-text.shape[0]), (0, 0)])
-        # print(res.shape)
-        return res
 
 
     def make_model(self):
 
         input1 = Input(shape=(self.maxlen, self.embedding_dim))
-        conv1 = Conv1D(filters=self.filter_num, kernel_size=self.filter_size, padding="valid", activation="relu", strides=1)(input1)
+        conv1 = Conv1D(filters=self.filter_num, kernel_size=self.filter_size, padding="valid", activation="relu",strides=1)(input1)
         pool1 = GlobalMaxPooling1D()(conv1)
         flat1 = Flatten()(pool1)
         dense1 = Dense(self.feature_size)(flat1)
+        dense1 = Dropout(0.2)(dense1, training=True)
 
         input2 = Input(shape=(self.maxlen, self.embedding_dim))
         conv2 = Conv1D(filters=self.filter_num, kernel_size=self.filter_size, padding="valid", activation="relu", strides=1)(input2)
         pool2 = GlobalMaxPooling1D()(conv2)
         flat2 = Flatten()(pool2)
         dense2 = Dense(self.feature_size)(flat2)
+        dense2 = Dropout(0.2)(dense2, training=True)
 
         output = Dot(axes=1)([dense1, dense2])
         self.model = Model(inputs=[input1, input2], outputs=[output])
-        self.model.compile(optimizer="RMSprop", loss="mse")
+        self.model.compile(optimizer=RMSprop(lr=0.002), loss="mse")
+

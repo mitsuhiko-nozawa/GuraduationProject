@@ -34,6 +34,7 @@ class cf_trainer(trainer):
 
     def predict(self, test):
         self.test_size = len(test["asin"])
+        nonPredictableNum = 0
 
         for user_id, item_id, overall in zip(test["reviewerID"], test["asin"], test["overall"]):
             sim_vec = self.calc_sim(user_id)
@@ -42,10 +43,12 @@ class cf_trainer(trainer):
                 # おそらく共通点が全くない
                 print("invalid data is ", user_id, " ", item_id, " ", overall)
                 # print(sim_vec)
+                nonPredictableNum += 1
                 continue
             pred_overall = np.dot(sim_vec, item_vec) / np.sum(np.abs(sim_vec))
             self.errors.append(pred_overall - overall)
         self.errors = np.array(self.errors)
+        print("nonPredictableNum : ", nonPredictableNum)
 
     def calc_sim(self, userId): #ユーザとそれ以外の人との類似度を計算する
         user_vec = self.coo2vec(self.items_by_user[userId], self.item_size)
@@ -62,9 +65,9 @@ class cf_trainer(trainer):
 
 
     def evaluate(self):
-        rmse = (np.sum(self.errors**2)/self.errors.shape[0])**0.5
-        mae = np.sum(np.abs(self.errors)) / self.errors.shape[0]
-        print("test: rmse is ", rmse, ", mae is ", mae)
+        error = mse(self.errors)
+        print("     test: loss is ", error)
+
 
 
 
