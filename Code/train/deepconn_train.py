@@ -22,18 +22,6 @@ files = [
     "bgg-13m-reviews__5.csv.gz",
     "bgg-13m-reviews__10.csv.gz"
 ]
-files = [
-
-    "yelp_academic_dataset_review__1.csv.gz",
-    "yelp_academic_dataset_review__5.csv.gz",
-    "yelp_academic_dataset_review__10.csv.gz",
-    "bgg-13m-reviews__1.csv.gz",
-    "bgg-13m-reviews__5.csv.gz",
-    "bgg-13m-reviews__10.csv.gz"
-
-]
-#files = ["AMAZON_FASHION__1.csv.gz"]
-
 
 path = "../../Dataset/processed/"
 path2 = "../../Dataset/Corpus/GoogleNews-vectors-negative300.bin.gz"
@@ -122,19 +110,18 @@ for i, file in enumerate(files):
             #continue
         embedding_dim = int(param["embedding_dim"])
         filter_size = int(param["filter_size"])
-        lr = param["lr"]
+        # lr = param["lr"]
         batch_size = int(param["batch_size"])
 
-        filter_size = 3
-        embedding_dim = 25
-        batch_size = 100
+        # filter_size = 3
+        # embedding_dim = 25
+        # batch_size = 100
         print("param ...   lr :", lr)
         DeepCoNN = DeepCoNN_trainer(user_size, item_size, parser,
                                     words_by_user, words_by_item,
                                     embedding_dim=embedding_dim, filter_num=100, filter_size=filter_size,
                                     feature_size=25, maxlen=MAXLEN,
                                     batch_size=batch_size, epoch=1)
-        # del words_by_user, words_by_item
         DeepCoNN.train(train, valid)
         DeepCoNN.predict(test)
         test_loss = DeepCoNN.evaluate()
@@ -148,14 +135,3 @@ for i, file in enumerate(files):
             params.at[i, "test_loss"] = -1
         params.to_csv(grid_fname, index=False)
         print("")
-
-
-
-"""
-_10では
-25, 100
-
-_5
-40 epoch
-1.066395254685502
-"""

@@ -19,10 +19,7 @@ files = [
     "bgg-13m-reviews__5.csv.gz",
     "bgg-13m-reviews__10.csv.gz"
 ]
-files = [
-    "yelp_academic_dataset_review__10.csv.gz"
 
-]
 path = "../../Dataset/processed/"
 MAXLEN = 300
 
@@ -88,11 +85,10 @@ for i, file in enumerate(files):
         if param["val_loss"] != 0 or param["test_loss"] != 0:
             print("iter ", i, " is skipped")
             continue
-        lr = 0.0001
-        r = 0.01
-        dim_size = 5
-        #if lr == 0.0001:
-        #    continue
+        r = param["r"]
+        lr = param["lr"]
+        dim_size = param["dim_size"]
+
         print("param ...   lr :", lr, ",  r :", r, ", dim_size :", dim_size)
 
 
@@ -109,14 +105,6 @@ for i, file in enumerate(files):
         else:
             params.at[i, "val_loss"] = -1
             params.at[i, "test_loss"] = -1
-        #params.to_csv(grid_fname, index=False)
+        params.to_csv(grid_fname, index=False)
         print("")
 
-
-"""
-2.168
-lr = 0.0001
-r = 0.1
-k = 5
-
-"""

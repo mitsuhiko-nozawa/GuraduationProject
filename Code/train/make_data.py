@@ -126,8 +126,6 @@ for i, file in enumerate(files):
 
     del notParsedWords
 
-    ###
-    # ./data/words_by_user/{file}
     pd.DataFrame(words_by_user_.items(), columns=["user_id", "words"]).to_csv(
         "data/words_by_user/" + file, index=False)
     pd.DataFrame(words_by_item_.items(), columns=["item_id", "words"]).to_csv(
@@ -135,6 +133,3 @@ for i, file in enumerate(files):
     train_df.to_csv("data/train/" + file, index=False)
     valid_df.to_csv("data/valid/" + file, index=False)
     test_df.to_csv("data/test/" + file, index=False)
-
-
-

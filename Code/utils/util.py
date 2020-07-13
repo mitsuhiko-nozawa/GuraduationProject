@@ -1,7 +1,5 @@
 import numpy as np
 
-
-
 def L2norm(a):
     return np.sum(a**2)**0.5
 

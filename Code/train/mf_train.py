@@ -24,10 +24,6 @@ files = [
     "bgg-13m-reviews__5.csv.gz",
     "bgg-13m-reviews__10.csv.gz"
 ]
-files = [
-    "bgg-13m-reviews__10.csv.gz"
-
-]
 
 path = "../../Dataset/processed/"
 for i, file in enumerate(files):
@@ -75,14 +71,12 @@ for i, file in enumerate(files):
         if param["val_loss"] != 0 or param["test_loss"] != 0:
             print("iter ", i, " is skipped")
             continue
-        lr = 0.0001
-        r = 1.0
-        dim_size = 5
-        #if lr == 0.0001:
-        #    continue
+
+        r = param["r"]
+        lr = param["lr"]
+        dim_size = param["dim_size"]
+
         print("param ...   lr :", lr, ",  r :", r, ", dim_size :", dim_size)
-
-
         mf = mf_trainer(user_size, item_size, train_size, valid_size, test_size)
         mf.train(train, valid, dim_size=dim_size, r=r, lr=lr, epoch_size=2500, desc_step=100, early_stopping=True)
         mf.predict(test)
@@ -95,5 +89,5 @@ for i, file in enumerate(files):
         else:
             params.at[i, "val_loss"] = -1
             params.at[i, "test_loss"] = -1
-        #params.to_csv(grid_fname, index=False)
+        params.to_csv(grid_fname, index=False)
         print("")
