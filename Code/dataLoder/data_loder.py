@@ -8,8 +8,7 @@ import numpy as np
 import pandas as pd
 
 
-
-def data_loder(fname, DROP_NUM = 1):
+def data_loder1(d_path, fname, DROP_NUM = 1):
     """
     AMAZONとyelpのデータの前処理
     ・jsonの解凍、処理
@@ -17,10 +16,8 @@ def data_loder(fname, DROP_NUM = 1):
     ・データ抽出する
     """
 
-
-    print("===============", fname, "file is being processed ===============")
+    print("== start ========", fname, "file is being processed ===============")
     # gzipから解凍
-    d_path = "./Dataset/raw/"
     lines = []
     with gzip.open(d_path + fname, "rt") as gzip_open:
         while True:
@@ -84,23 +81,66 @@ def data_loder(fname, DROP_NUM = 1):
     df.drop(index=df[df["asin"].isin(drop_items)].index, inplace=True)
 
     print(" final df shape is ", df.shape)
-    fname_save = d_path.replace("raw", "processed") + fname.replace(".json.gz", "__") + str(DROP_NUM) + ".csv.gz"
+    fname_save = d_path.replace("raw", "processed2") + fname.replace(".json.gz", "__") + str(DROP_NUM) + ".csv.gz"
     df.to_csv(fname_save, index=False)
 
-    print("===============", fname, " is completely processed ===============")
+    print("== end =========", fname, " is completely processed ===============")
     print("")
 
 
-if __name__ == "__main__":
-    DROP_NUM = 1
-    print(os.listdir())
-    data_list = os.listdir("./Dataset/raw/")
-    print(data_list)
-    for fname in data_list:
-        if ".gz" in fname:
-            if "AMAZON" in fname:
-                data_loder(fname, DROP_NUM=DROP_NUM)
-            elif "yelp" in fname:
-                data_loder(fname, DROP_NUM=DROP_NUM)
 
 
+def data_loder2(d_path, fname, DROP_NUM = 1):
+    print("== start ========", fname, "file is being processed ===============")
+    df = pd.read_csv(d_path+fname)
+    print(" df shape is ", df.shape)
+
+    # 必要なカラムだけ取り出す
+    drop_col = []
+    rename_dic = {}
+    if "bgg" in fname:
+        drop_col = ['Unnamed: 0', 'ID']
+        rename_dic = {
+            "name": "asin",
+            "user": "reviewerID",
+            "comment": "reviewText",
+            "rating": "overall"
+        }
+
+    if "hotel" in fname:
+        drop_col = ['Date', 'NoOfReaders',
+                    'HelpfulToNoOfreaders', 'Value_rating', 'Rooms_rating',
+                    'Location_rating', 'Cleanliness_rating', 'Checkin_rating',
+                    'Service_rating', 'Businessservice_rating',
+                    'AveragePricing']
+        rename_dic = {
+            "Hotelid": "asin",
+            "userid": "reviewerID",
+            "reviewtext": "reviewText",
+            "AverageOverallRatingOfHotel" : "overall"
+        }
+
+    df.drop(columns=drop_col, inplace=True)
+    df.rename(columns=rename_dic, inplace=True)
+    print(df.columns)
+
+
+    # reviewerID, asinが同じだが種類が異なるアイテムを落とす
+    df = df[~df.duplicated(subset=["reviewerID", "asin"], keep="first")]
+    print("non duplicated df shape is ", df.shape)
+
+    # 評価数がDROP_NUM未満のユーザ、アイテムを落とす
+    drop_users = df.groupby(["reviewerID"]).filter(lambda group: group["overall"].count() < DROP_NUM)["reviewerID"].unique()
+    drop_items = df.groupby(["asin"]).filter(lambda group: group["overall"].count() < DROP_NUM)["asin"].unique()
+    print(" drop user : ", len(drop_users))
+    print(" drop item : ", len(drop_items))
+
+    df.drop(index=df[df["reviewerID"].isin(drop_users)].index, inplace=True)
+    df.drop(index=df[df["asin"].isin(drop_items)].index, inplace=True)
+
+    print(" final df shape is ", df.shape)
+    fname_save = d_path.replace("raw", "processed2") + fname.replace(".csv.gz", "__") + str(DROP_NUM) + ".csv.gz"
+    df.to_csv(fname_save, index=False)
+
+    print("== end ==========", fname, " is completely processed ===============")
+    print("")

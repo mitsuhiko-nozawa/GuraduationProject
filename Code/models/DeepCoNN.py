@@ -2,37 +2,33 @@ from .trainer import trainer
 from utils.util import mse, mae
 
 import numpy as np
+import pandas as pd
+from gensim.models import KeyedVectors
 
 from tensorflow.keras.models import Sequential, Model
-from tensorflow.keras.layers import Input, Dense, Dropout, Flatten, Dot
+from tensorflow.keras.layers import Input, Dense, Dropout, Flatten, Dot, Add, Concatenate
 from tensorflow.keras.layers import Conv1D, GlobalMaxPooling1D
-from tensorflow.keras.optimizers import RMSprop
+from tensorflow.keras.optimizers import RMSprop, Adam
+from tensorflow.keras.utils import Sequence
+from tensorflow.keras import regularizers
+from tensorflow.keras.callbacks import EarlyStopping
 
 
 
-class DeepCoNN_trainer(trainer):
-    def __init__(self, user_dict, item_dict,
-                 text_by_user, text_by_item,
+class DeepCoNN_trainer:
+    def __init__(self, user_size, item_size, parser_,
+                 words_by_user_, words_by_item_,
                  embedding_dim, filter_num, filter_size, feature_size, maxlen,
                  batch_size, epoch):
-        super().__init__(user_dict, item_dict)
-        """
-        親クラス内のコンストラクタ
-        self.user_dict = user_dict
-        self.item_dict = item_dict
-        self.user_size = len(self.user_dict)
-        self.item_size = len(self.item_dict)
+        global parser
+        parser = parser_
+        global words_by_user
+        words_by_user = words_by_user_
+        global words_by_item
+        words_by_item = words_by_item_
 
-        self.items_by_user = None
-        self.users_by_item = None
-
-        self.errors = []
-
-        """
-        self.text_by_user = text_by_user
-        self.text_by_item = text_by_item
-
-
+        self.user_size = user_size
+        self.item_size = item_size
         self.model = None
         self.maxlen = maxlen
 
@@ -43,90 +39,177 @@ class DeepCoNN_trainer(trainer):
         self.batch_size = batch_size
         self.epoch = epoch
 
+
+
     def train(self, train, valid):
+        train_size = len(train["asin"])
+        valid_size = len(valid["asin"])
 
         # create model
         print("==========model creation==========")
-        self.make_model()
+        # self.make_model()
+        self.make_model2()
         # prepare input
-        print("==========data preparation==========")
-        #train
-        user_texts = []
-        item_texts = []
-        overalls = []
-        for userid, itemid, overall in zip(train["reviewerID"], train["asin"], train["overall"]):
-            user_texts.append(self.text_by_user[userid])
-            item_texts.append(self.text_by_item[itemid])
-            overalls.append(overall)
+        print("==========generator preparation==========")
+        train_generator = Generator(train["reviewerID"], train["asin"], train["overall"], train_size,
+                                    self.batch_size, self.maxlen, self.embedding_dim)
+
+        valid_generator = Generator(valid["reviewerID"], valid["asin"], valid["overall"], valid_size,
+                                    self.batch_size, self.maxlen, self.embedding_dim)
 
 
-        train_X = [np.array(user_texts), np.array(item_texts)]
-        train_Y = np.array(overalls)
-        del user_texts, item_texts, overalls, train
-
-        # valid
-        user_texts = []
-        item_texts = []
-        overalls = []
-        for userid, itemid, overall in zip(valid["reviewerID"], valid["asin"], valid["overall"]):
-            user_texts.append(self.text_by_user[userid])
-            item_texts.append(self.text_by_item[itemid])
-            overalls.append(overall)
-
-        valid_X = [np.array(user_texts), np.array(item_texts)]
-        valid_Y = np.array(overalls)
-
-        del user_texts, item_texts, overalls
 
         # training
         print("==========training==========")
-        self.model.fit(train_X, train_Y, batch_size=self.batch_size, epochs=self.epoch, validation_data=(valid_X, valid_Y))
-        # self.model.save_weights('param.hdf5')
+        cb = EarlyStopping(monitor='val_loss', patience=2, verbose=0, mode='auto')
+        self.model.fit_generator(
+            train_generator,
+            epochs=self.epoch,
+            #callbacks=[cb],
+            validation_data=valid_generator
+        )
+
 
 
 
 
     def predict(self, test):
-        user_texts = []
-        item_texts = []
-        overalls = []
-        for userid, itemid, overall in zip(test["reviewerID"], test["asin"], test["overall"]):
-            user_texts.append(self.text_by_user[userid])
-            item_texts.append(self.text_by_item[itemid])
-            overalls.append(overall)
+        test_size = len(test["asin"])
+        test_generator = Generator(test["reviewerID"], test["asin"], test["overall"], test_size,
+                                    self.batch_size, self.maxlen, self.embedding_dim)
 
+        self.preds = self.model.predict_generator(
+            test_generator
+        )
 
-        test_X = [np.array(user_texts), np.array(item_texts)]
-        test_Y = np.array(overalls)
-        del user_texts, item_texts, overalls, test
-
-        self.preds = self.model.predict(test_X).reshape(-1)
-        self.errors = self.preds-test_Y
+        self.preds = self.preds.reshape(-1)
+        self.errors = self.preds-test["overall"]
         print("")
 
 
     def evaluate(self):
         loss = mse(self.errors)
         print("test loss is : ", loss)
+        return loss
 
 
+    """
     def make_model(self):
 
         input1 = Input(shape=(self.maxlen, self.embedding_dim))
         conv1 = Conv1D(filters=self.filter_num, kernel_size=self.filter_size, padding="valid", activation="relu",strides=1)(input1)
         pool1 = GlobalMaxPooling1D()(conv1)
         flat1 = Flatten()(pool1)
-        dense1 = Dense(self.feature_size)(flat1)
+        dense1 = Dense(self.feature_size, kernel_regularizer=regularizers.l2(0.001), activation="relu")(flat1)
         dense1 = Dropout(0.2)(dense1, training=True)
 
         input2 = Input(shape=(self.maxlen, self.embedding_dim))
         conv2 = Conv1D(filters=self.filter_num, kernel_size=self.filter_size, padding="valid", activation="relu", strides=1)(input2)
         pool2 = GlobalMaxPooling1D()(conv2)
         flat2 = Flatten()(pool2)
-        dense2 = Dense(self.feature_size)(flat2)
+        dense2 = Dense(self.feature_size, kernel_regularizer=regularizers.l2(0.001), activation="relu")(flat2)
         dense2 = Dropout(0.2)(dense2, training=True)
 
         output = Dot(axes=1)([dense1, dense2])
         self.model = Model(inputs=[input1, input2], outputs=[output])
         self.model.compile(optimizer=RMSprop(lr=0.002), loss="mse")
+    """
 
+    def make_model2(self):
+        input1 = Input(shape=(self.maxlen, self.embedding_dim))
+        conv1 = Conv1D(filters=self.filter_num,
+                       kernel_size=self.filter_size,
+                       padding="valid",
+                       activation="relu",
+                       #kernel_regularizer=regularizers.l2(0.001),
+                       #bias_regularizer=regularizers.l2(0.001),
+                       strides=1)(input1)
+        pool1 = GlobalMaxPooling1D()(conv1)
+        flat1 = Flatten()(pool1)
+        dense1 = Dense(self.feature_size,
+                       #kernel_regularizer=regularizers.l2(0.02),
+                       #bias_regularizer=regularizers.l2(0.02),
+                       activation="relu")(flat1)
+        dense1 = Dropout(0.5)(dense1)
+
+
+        input2 = Input(shape=(self.maxlen, self.embedding_dim))
+        conv2 = Conv1D(filters=self.filter_num,
+                       kernel_size=self.filter_size,
+                       padding="valid",
+                       activation="relu",
+                       #kernel_regularizer=regularizers.l2(0.001),
+                       #bias_regularizer=regularizers.l2(0.001),
+                       strides=1)(input2)
+        pool2 = GlobalMaxPooling1D()(conv2)
+        flat2 = Flatten()(pool2)
+        dense2 = Dense(self.feature_size,
+                       #kernel_regularizer=regularizers.l2(0.02),
+                       #bias_regularizer=regularizers.l2(0.02),
+                       activation="relu")(flat2)
+        dense2 = Dropout(0.5)(dense2)
+
+
+        output2 = Concatenate()([dense1, dense2])
+        #output2 = Dense(1,
+        #                kernel_regularizer=regularizers.l2(0.001),
+        #                bias_regularizer=regularizers.l2(0.001),
+        #                activation="relu"
+        #                )(output2)
+        output2 = Dense(1)(output2)
+
+        self.model = Model(inputs=[input1, input2], outputs=[output2])
+        self.model.compile(optimizer=RMSprop(lr=0.0005), loss="mse")
+        #self.model.compile(optimizer=RMSprop(lr=0.000015), loss="mse")
+
+
+class Generator(Sequence):
+    def __init__(self, users, items, overalls, data_size,
+                 batch_size, maxlen, embedding_dim):
+        self.users = users
+        self.items = items
+        self.overalls = overalls
+        self.data_size = data_size
+        self.batch_size = batch_size
+        self.maxlen = maxlen
+        self.embedding_dim = embedding_dim
+
+    def __getitem__(self, idx):
+        # バッチの番号
+        #X, yを返す
+
+        users = self.users[idx*self.batch_size:(idx+1)*self.batch_size]
+        items = self.items[idx*self.batch_size:(idx+1)*self.batch_size]
+        size = len(users)
+
+        user_tensor = np.zeros((size, self.maxlen, self.embedding_dim))
+        item_tensor = np.zeros((size, self.maxlen, self.embedding_dim))
+
+        # make tensor
+        for i, userid in enumerate(users):
+            words = words_by_user[userid]
+            mat = np.zeros((self.maxlen, self.embedding_dim))
+            for j, word in enumerate(words):
+                vec = parser[word][:self.embedding_dim]
+                mat[j] = vec
+            user_tensor[i] = mat
+
+        for i, itemid in enumerate(items):
+            words = words_by_item[itemid]
+            mat = np.zeros((self.maxlen, self.embedding_dim))
+            for j, word in enumerate(words):
+                vec = parser[word][:self.embedding_dim]
+                mat[j] = vec
+            item_tensor[i] = mat
+
+        X = [user_tensor, item_tensor]
+        y = self.overalls[idx*self.batch_size:(idx+1)*self.batch_size]
+
+        return X, y
+
+    def __len__(self):
+        # バッチ数を返す
+        return int((self.data_size-1)/self.batch_size+1)
+
+    def on_eopch_end(self):
+        pass
